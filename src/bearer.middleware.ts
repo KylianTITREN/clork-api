@@ -8,9 +8,7 @@ export class BearerMiddleware implements NestMiddleware {
 
     const bearer = authorization?.split('Bearer ')[1];
 
-    console.log(bearer, process.env.BEARER);
-
     if (bearer === process.env.BEARER) next();
-    else res.status(401).send('UNAUTHORIZED');
+    else res.status(401).send({ message: 'UNAUTHORIZED' });
   }
 }
