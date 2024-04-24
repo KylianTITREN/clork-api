@@ -49,7 +49,7 @@ export class AppService {
             const date = new Date(start);
 
             if (chill.includes(day)) {
-              result.push({ date, informations: 'Chill' });
+              result.push({ date, title: 'Repos 🌤️' });
             } else {
               const startHour = hours[i];
               const endHour = hours[i + 1];
@@ -63,7 +63,7 @@ export class AppService {
                 startHour &&
                 endMinutes < startMinutes
               ) {
-                result.push({ date, informations: 'Erreur' });
+                result.push({ date, error: true });
                 replace = endHour;
               } else {
                 if (replace) {
@@ -71,6 +71,7 @@ export class AppService {
                     date,
                     startHour: replace,
                     endHour: startHour,
+                    title: _title(startHour, endHour),
                   });
 
                   replace = null;
@@ -80,8 +81,9 @@ export class AppService {
                       date,
                       startHour: replace || startHour,
                       endHour,
+                      title: _title(replace || startHour, endHour),
                     });
-                  else result.push({ date, informations: 'Erreur' });
+                  else result.push({ date, error: true });
                 }
               }
 
@@ -106,4 +108,13 @@ function _toMinutes(hour) {
     .split('h')
     .map((value) => (value ? parseInt(value) : 0));
   return hours * 60 + minutes;
+}
+
+function _title(start, end) {
+  if (start.includes('8h')) return 'Ouverture 🥱';
+  if (start.includes('10h') || start.includes('10h30') || start.includes('11h'))
+    return 'Journée 🌞';
+  if (end.includes('20h30')) return 'Fermeture 🌙';
+  if (end.includes('20h')) return 'Fin de journée 🌛';
+  return `Travail 💼`;
 }
