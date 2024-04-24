@@ -28,7 +28,7 @@ export class AppService {
 
     const dates = output.match(patterns.dates);
     const start = new Date(`${dates[3]}-${dates[2]}-${dates[1]}`);
-    const end = new Date(`${dates[6]}-${dates[5]}-${dates[4]}`);
+    //const end = new Date(`${dates[6]}-${dates[5]}-${dates[4]}`);
 
     const lines = output.split('\n');
     const result = [];
