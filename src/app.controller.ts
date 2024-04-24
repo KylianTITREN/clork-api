@@ -1,7 +1,8 @@
 import {
   Controller,
-  Get,
+  Post,
   Query,
+  Res,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
@@ -12,7 +13,7 @@ import { AppService } from './app.service';
 export class AppController {
   constructor(private readonly service: AppService) {}
 
-  @Get('/generate')
+  @Post('/generate')
   @UseInterceptors(FileInterceptor('file'))
   async generate(
     @Query('firstname') firstname: string,
@@ -20,13 +21,16 @@ export class AppController {
     @Query('chill') chill: string,
     @Query('sunday') sunday: string,
     @UploadedFile() file: Express.Multer.File,
+    @Res() res,
   ): Promise<string> {
-    return await this.service.generate(
+    const data = await this.service.generate(
       file,
       firstname,
       lastname,
       chill.split(',').map((day) => parseInt(day)),
       sunday === '1',
     );
+
+    return res.status(200).send(data);
   }
 }
