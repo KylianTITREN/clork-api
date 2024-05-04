@@ -1,5 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { PSM, createWorker } from 'tesseract.js';
+import { createWorker } from 'tesseract.js';
+
+const patterns = {
+  name: /([A-Za-zÀ-ÖØ-öø-ÿ'\-]+)\s+([A-Za-zÀ-ÖØ-öø-ÿ'\-]+)/g,
+  hours: /\d{1,2}h\d{0,2}/g,
+  dates: /du (\d{2})\/(\d{2})\/(\d{4}) au (\d{2})\/(\d{2})\/(\d{4})/,
+};
 
 @Injectable()
 export class AppService {
@@ -12,20 +18,11 @@ export class AppService {
   ): Promise<any> {
     try {
       const worker = await createWorker('fra');
-      await worker.setParameters({
-        tessedit_pageseg_mode: PSM.AUTO,
-        user_defined_dpi: '300',
-      });
+
       const res = await worker.recognize(file.buffer);
       await worker.terminate();
 
       const output = res.data.text;
-
-      const patterns = {
-        name: /([A-Za-zÀ-ÖØ-öø-ÿ'\-]+)\s+([A-Za-zÀ-ÖØ-öø-ÿ'\-]+)/g,
-        hours: /\d{1,2}h\d{0,2}/g,
-        dates: /du (\d{2})\/(\d{2})\/(\d{4}) au (\d{2})\/(\d{2})\/(\d{4})/,
-      };
 
       const dates = output.match(patterns.dates);
       const start = new Date(`${dates[3]}-${dates[2]}-${dates[1]}`);
@@ -38,8 +35,8 @@ export class AppService {
         const name = line.toLowerCase().match(patterns.name);
         const [lastName, firstName] = name ? name[0].split(' ') : [null, null];
         if (
-          firstName === firstname.toLowerCase() &&
-          lastName === lastname.toLowerCase()
+          firstName?.includes(firstname.toLowerCase()) &&
+          lastName?.includes(lastname.toLowerCase())
         ) {
           const hours = line.match(patterns.hours);
 
@@ -50,7 +47,7 @@ export class AppService {
               const date = new Date(start);
 
               if (chill.includes(day)) {
-                result.push({ date, title: 'Repos 🌤️' });
+                result.push({ date, day, title: 'Repos 🌤️' });
               } else {
                 const startHour = hours[i];
                 const endHour = hours[i + 1];
@@ -64,27 +61,45 @@ export class AppService {
                   startHour &&
                   endMinutes < startMinutes
                 ) {
-                  result.push({ date, error: true });
+                  result.push({ date, day, error: true });
                   replace = endHour;
                 } else {
-                  if (replace) {
+                  if (replace && startHour) {
+                    const daily = new Date(date);
+                    const updated = new Date(
+                      daily.setDate(daily.getDate() + day - 1),
+                    );
                     result.push({
                       date,
-                      startHour: replace,
-                      endHour: startHour,
-                      title: _title(startHour, endHour),
+                      day,
+                      notes: notes(output, replace, startHour, lastName, i),
+                      start: times(updated, replace),
+                      end: times(updated, startHour),
+                      title: _title(replace, startHour),
                     });
 
                     replace = null;
                   } else {
+                    const daily = new Date(date);
+                    const updated = new Date(
+                      daily.setDate(daily.getDate() + day - 1),
+                    );
                     if (startHour && endHour)
                       result.push({
                         date,
-                        startHour: replace || startHour,
-                        endHour,
+                        day,
+                        notes: notes(
+                          output,
+                          replace || startHour,
+                          endHour,
+                          lastName,
+                          i,
+                        ),
+                        start: times(updated, replace || startHour),
+                        end: times(updated, endHour),
                         title: _title(replace || startHour, endHour),
                       });
-                    else result.push({ date, error: true });
+                    else result.push({ date, day, error: true });
                   }
                 }
 
@@ -97,12 +112,35 @@ export class AppService {
         }
       }
 
-      return result;
+      return { result };
     } catch (error) {
       console.error(error);
       return { error: true };
     }
   }
+}
+
+function notes(output, startHour, endHour, lastName, i) {
+  let note = '';
+
+  if (startHour === '8h') {
+    const users = _extract(output, startHour, endHour, lastName, i);
+    note = `Ouverture avec : ${users.map((user) => `${user.firstName} ${user.lastName}`).join(', ')}`;
+  }
+
+  if (endHour === '20h30') {
+    const users = _extract(output, startHour, endHour, lastName, i);
+    note = `Fermeture avec : ${users.map((user) => `${user.firstName} ${user.lastName}`).join(', ')}`;
+  }
+
+  return note;
+}
+
+function times(date, time) {
+  const [hour, minutes] = time.split(/h|:/);
+  date.setHours(parseInt(hour, 10));
+  date.setMinutes(minutes ? parseInt(minutes, 10) : 0);
+  return date.toISOString();
 }
 
 function _toMinutes(hour) {
@@ -123,4 +161,31 @@ function _title(start, end) {
   if (end && end.includes('20h30')) return 'Fermeture 🌙';
   if (end && end.includes('20h')) return 'Fin de journée 🌛';
   return `Travail 💼`;
+}
+
+function _extract(text, yourStartHour, yourEndHour, lastname, index) {
+  const shifts = [];
+  const lines = text.split('\n');
+
+  lines.forEach((line) => {
+    const name = line.toLowerCase().match(patterns.name);
+    const [lastName, firstName] = name ? name[0].split(' ') : [null, null];
+
+    const hoursMatches = line.match(patterns.hours);
+    if (
+      hoursMatches &&
+      (hoursMatches[index] === yourStartHour ||
+        hoursMatches[index + 1] === yourEndHour) &&
+      lastName &&
+      firstName &&
+      !lastName.includes(lastname)
+    ) {
+      shifts.push({
+        firstName: firstName.charAt(0).toUpperCase() + firstName.slice(1),
+        lastName: lastName.charAt(0).toUpperCase() + lastName.slice(1),
+      });
+    }
+  });
+
+  return shifts;
 }

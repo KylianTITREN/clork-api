@@ -31,6 +31,6 @@ export class AppController {
       sunday === '1',
     );
 
-    return res.status(200).send(data);
+    return res.status(200).send({ data: data.result });
   }
 }
